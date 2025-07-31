@@ -1,0 +1,31 @@
+command_template: >-
+  uv run main.py 
+  --data.num_workers 2 
+  --trainer.eval_num_episodes 50 
+  --data.max_epochs {{num_epochs}} 
+  --data.reward_percentiles 0.0 
+  --use_wandb 
+  --wandb_project {{wandb_project}} 
+  --experiment_name lr{{learning_rate}}-ema{{ema_decay}}-{{loss_function}}-wd{{weight_decay}}-e{{num_epochs}} 
+  --data.ds_name mujoco/{{env}}/{{level}} 
+  --trainer.loss_function {{loss_function}} 
+  --trainer.optimizer_config.learning_rate {{learning_rate}} 
+  --trainer.optimizer_config.weight_decay {{weight_decay}}
+  --trainer.optimizer_config.use_scheduler 
+  --trainer.use_ema 
+  --trainer.ema_start_epoch 3 
+  --trainer.ema_update_interval 1 
+  --trainer.ema_decay {{ema_decay}} 
+  agent:dnn-agent-config --agent.n_future 1 --agent.n_history 1
+template_args:
+  learning_rate: [1e-5, 5e-5, 1e-4, 5e-4]
+  ema_decay: [0.0, 0.99, 0.995, 0.999]
+  loss_function: "mse_loss"
+  num_epochs: [80, 160]
+  env: "humanoid"
+  level: "expert-v0"
+  weight_decay: 1e-2
+  wandb_project: "minari-humanoid"
+job_prefix: "minari_job"
+setup_str: "export MINARI_DATASETS_PATH=\"/path/to/data\""
+workers_per_gpu: 5
