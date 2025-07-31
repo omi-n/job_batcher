@@ -5,7 +5,7 @@ A Python utility for running multiple parameter sweep jobs across multiple GPUs 
 ## Features
 
 - **Multi-GPU support**: Automatically distributes jobs across available GPUs
-- **Parameter sweeps**: Generate all combinations of hyperparameters using Cartesian product
+- **Parameter sweeps**: Generate all combinations of hyperparameters
 - **YAML configuration**: Define jobs and parameters in YAML files
 - **Tmux session management**: Each job runs in its own tmux session
 - **Load balancing**: Automatically assigns jobs to the GPU with the fewest running jobs
