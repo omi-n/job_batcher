@@ -99,7 +99,7 @@ template_args:
   wandb_project: "minari-humanoid-2"
 
 job_prefix: "minari_job"
-setup_str: "export MINARI_DATASETS_PATH=\"/media/lam/.minari\""
+setup_str: "export MINARI_DATASETS_PATH=\"/path/to/data\""
 ```
 
 This configuration will generate 32 different job combinations (4 × 4 × 1 × 2 learning rates × ema_decay × loss_function × num_epochs).
