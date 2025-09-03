@@ -14,15 +14,25 @@ A Python utility for running multiple parameter sweep jobs across multiple GPUs 
 
 ## Installation
 
+### From GitHub (Recommended)
+
+Install directly from GitHub using pip:
+
+```bash
+pip install git+https://github.com/omi-n/job_batcher.git
+```
+
+### From Source
+
 1. Clone this repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/omi-n/job_batcher.git
 cd job_batcher
 ```
 
-2. Install dependencies:
+2. Install in development mode:
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### Requirements
@@ -35,6 +45,8 @@ pip install -r requirements.txt
 
 ## Usage
 
+After installation, you can use the `job-batcher` command from anywhere:
+
 ### Basic Usage
 
 You can use the job batcher in two ways:
@@ -42,7 +54,7 @@ You can use the job batcher in two ways:
 #### 1. Command Line Arguments
 
 ```bash
-python job_batcher.py \
+job-batcher \
   --command_template "python train.py --lr {{learning_rate}} --batch_size {{batch_size}}" \
   --template_args '{"learning_rate": [0.001, 0.01, 0.1], "batch_size": [32, 64, 128]}'
 ```
@@ -50,7 +62,7 @@ python job_batcher.py \
 #### 2. YAML Configuration File
 
 ```bash
-python job_batcher.py --config_file configs/humanoid_train.yaml
+job-batcher --config_file configs/humanoid_train.yaml
 ```
 
 ### Configuration Options
@@ -144,7 +156,7 @@ tmux list-sessions | grep <job_prefix> | cut -d: -f1 | xargs -I {} tmux kill-ses
 1. Create a YAML configuration file with your experiment parameters
 2. Run the job batcher:
    ```bash
-   python job_batcher.py --config_file configs/my_experiment.yaml
+   job-batcher --config_file configs/my_experiment.yaml
    ```
 3. Monitor progress:
    ```bash

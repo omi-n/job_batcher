@@ -155,9 +155,11 @@ def get_gpu_count():
     return int(run_command_get_output("nvidia-smi -L | wc -l"))
 
 
-if __name__ == "__main__":
-    """Example Usage: 
-    uv run job_batcher.py --command_template "asdf --aa {{aa}} --bb {{bb}}" --template_args '{"aa": [1, 2], "bb": [1, 2]}'
+def main():
+    """Main entry point for the job batcher CLI.
+
+    Example Usage:
+    job-batcher --command_template "asdf --aa {{aa}} --bb {{bb}}" --template_args '{"aa": [1, 2], "bb": [1, 2]}'
     """
     config = tyro.cli(JobRunnerConfig)
 
@@ -227,3 +229,7 @@ if __name__ == "__main__":
             job, config.job_prefix, idx, config.log_dir, min_gpu_id, config.setup_str
         )
         print(f"Launched job {idx} on GPU {min_gpu_id}: {job}")
+
+
+if __name__ == "__main__":
+    main()

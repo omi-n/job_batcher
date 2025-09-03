@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-batcher"
+version = "0.1.0"
+description = "A Python utility for running multiple parameter sweep jobs across multiple GPUs using tmux sessions"
+readme = "README.md"
+authors = [{name = "omi-n", email = "author@example.com"}]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.6"
+dependencies = [
+    "tyro",
+    "PyYAML",
+]
+
+[project.urls]
+Homepage = "https://github.com/omi-n/job_batcher"
+Repository = "https://github.com/omi-n/job_batcher"
+Issues = "https://github.com/omi-n/job_batcher/issues"
+
+[project.scripts]
+job-batcher = "job_batcher:main"
+
+[tool.setuptools]
+py-modules = ["job_batcher"]
+include-package-data = true
