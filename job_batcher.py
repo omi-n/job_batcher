@@ -163,6 +163,25 @@ def main():
     """
     config = tyro.cli(JobRunnerConfig)
 
+    # Check if all required parameters are None and show help
+    if (
+        config.command_template is None
+        and config.template_args is None
+        and config.config_file is None
+    ):
+        print(
+            "Error: You must provide either --config_file or both --command_template and --template_args"
+        )
+        print("\nUsage examples:")
+        print("  1. Using command line arguments:")
+        print(
+            '     job-batcher --command_template "python train.py --lr {{lr}}" --template_args \'{"lr": [0.001, 0.01]}\''
+        )
+        print("\n  2. Using a config file:")
+        print("     job-batcher --config_file configs/my_experiment.yaml")
+        print("\nFor more help, run: job-batcher --help")
+        return
+
     if config.config_file is not None:
         # Load the yaml
         with open(config.config_file, "r") as f:
@@ -177,6 +196,23 @@ def main():
                 config_dict["template_args"] = json.dumps(config_dict["template_args"])
 
         config = JobRunnerConfig(**config_dict)
+
+    # If not using config file, both command_template and template_args are required
+    if config.config_file is None and (
+        config.command_template is None or config.template_args is None
+    ):
+        print(
+            "Error: When not using --config_file, both --command_template and --template_args are required"
+        )
+        print("\nUsage examples:")
+        print("  1. Using command line arguments:")
+        print(
+            '     job-batcher --command_template "python train.py --lr {{lr}}" --template_args \'{"lr": [0.001, 0.01]}\''
+        )
+        print("\n  2. Using a config file:")
+        print("     job-batcher --config_file configs/my_experiment.yaml")
+        print("\nFor more help, run: job-batcher --help")
+        return
 
     template = config.command_template
 
