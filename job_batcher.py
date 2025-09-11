@@ -199,7 +199,16 @@ def main():
 
                 config_dict["template_args"] = json.dumps(config_dict["template_args"])
 
-        config = JobRunnerConfig(**config_dict)
+        # Start with YAML config, then override with any CLI args that are not None
+        loaded_config = JobRunnerConfig(**config_dict)
+        for field in dataclasses.fields(JobRunnerConfig):
+            cli_value = getattr(config, field.name)
+            if cli_value is not None:
+                setattr(loaded_config, field.name, cli_value)
+        config = loaded_config
+        
+    print(config)
+    exit()
 
     # If not using config file, both command_template and template_args are required
     if config.config_file is None and (
