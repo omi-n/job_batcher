@@ -10,6 +10,10 @@ import os
 
 @dataclasses.dataclass
 class JobRunnerConfig:
+    input_path: Optional[str] = None
+    """Path to input. Will be substituted into {{input}} in the command template if provided."""
+    output_path: Optional[str] = None
+    """Path to output. Will be substituted into {{output}} in the command template if provided."""
     command_template: Optional[str] = None
     """Template for the command to run each job.
     Should contain placeholders for job-specific arguments. Use {arg1}, {arg2}, etc. for job-specific arguments."""
@@ -228,6 +232,12 @@ def main():
     for combination in itertools.product(*value_lists):
         # Create a dictionary mapping each key to its value in this combination
         substitutions = dict(zip(keys, combination))
+
+        # Add input/output paths if provided
+        if config.input_path is not None:
+            substitutions["input_path"] = config.input_path
+        if config.output_path is not None:
+            substitutions["output_path"] = config.output_path
 
         # Substitute values into the template
         command = template
