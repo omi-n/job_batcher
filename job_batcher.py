@@ -206,9 +206,6 @@ def main():
             if cli_value is not None:
                 setattr(loaded_config, field.name, cli_value)
         config = loaded_config
-        
-    print(config)
-    exit()
 
     # If not using config file, both command_template and template_args are required
     if config.config_file is None and (
