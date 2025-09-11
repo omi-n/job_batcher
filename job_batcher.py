@@ -243,21 +243,18 @@ def main():
     # When a jobs finishes, launch the next one.
     # Launch that job to the gpu with fewest jobs running.
     # gpu_jobs = get_job_count_by_gpu(config.job_prefix, gpu_count)
+
     for idx, job in enumerate(commands):
         while (
             len(get_job_tmux_sessions(config.job_prefix))
             >= gpu_count * config.workers_per_gpu
         ):
             print("Waiting for a job to finish...")
-            # Wait for a job to finish
             run_command_get_output("sleep 5")
 
         gpu_jobs = get_job_tmux_sessions_by_gpu(config.job_prefix, gpu_count)
-        # Find the GPU with the fewest jobs running
         min_gpu_id = min(range(gpu_count), key=lambda i: len(gpu_jobs[i]))
 
-        # Launch the job in tmux
-        # if the log_dir does not exist, create it
         if not os.path.exists(config.log_dir):
             os.makedirs(config.log_dir)
 
@@ -265,6 +262,13 @@ def main():
             job, config.job_prefix, idx, config.log_dir, min_gpu_id, config.setup_str
         )
         print(f"Launched job {idx} on GPU {min_gpu_id}: {job}")
+
+    # Wait for all jobs to finish before exiting
+    print("All jobs launched. Waiting for all jobs to finish...")
+    while len(get_job_tmux_sessions(config.job_prefix)) > 0:
+        print(f"{len(get_job_tmux_sessions(config.job_prefix))} jobs still running...")
+        run_command_get_output("sleep 5")
+    print("All jobs finished.")
 
 
 if __name__ == "__main__":
