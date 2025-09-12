@@ -203,7 +203,9 @@ def main():
         loaded_config = JobRunnerConfig(**config_dict)
         for field in dataclasses.fields(JobRunnerConfig):
             cli_value = getattr(config, field.name)
-            if cli_value is not None:
+            default_value = field.default if field.default is not dataclasses.MISSING else None
+            # Only override if CLI value is not None and is different from the default
+            if cli_value is not None and cli_value != default_value:
                 setattr(loaded_config, field.name, cli_value)
         config = loaded_config
 
