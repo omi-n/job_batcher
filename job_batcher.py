@@ -203,7 +203,9 @@ def main():
         loaded_config = JobRunnerConfig(**config_dict)
         for field in dataclasses.fields(JobRunnerConfig):
             cli_value = getattr(config, field.name)
-            default_value = field.default if field.default is not dataclasses.MISSING else None
+            default_value = (
+                field.default if field.default is not dataclasses.MISSING else None
+            )
             # Only override if CLI value is not None and is different from the default
             if cli_value is not None and cli_value != default_value:
                 setattr(loaded_config, field.name, cli_value)
@@ -253,6 +255,19 @@ def main():
             command = command.replace(f"{{{{{key}}}}}", str(value))
 
         commands.append(command)
+
+    # Get WORLD_SIZE and NODE_RANK to get the current process's rank and total number of processes
+    world_size = int(os.environ.get("WORLD_SIZE", "1"))
+    rank = int(os.environ.get("NODE_RANK", "0"))
+    world_size = int(os.environ.get("SLURM_NNODES", world_size))
+    rank = int(os.environ.get("SLURM_NODEID", rank))
+
+    # If world_size == 1, run all commands in this process so don't chunk
+    if world_size == 1:
+        commands = commands
+    else:
+        # Chunk commands based on rank and world_size
+        commands = [cmd for i, cmd in enumerate(commands) if i % world_size == rank]
 
     # Get gpu count
     gpu_count = get_gpu_count()
