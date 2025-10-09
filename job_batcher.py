@@ -3,7 +3,7 @@ import dataclasses
 import tyro
 import itertools
 import json
-from typing import Optional
+from typing import Optional, List
 import yaml
 import os
 
@@ -30,6 +30,10 @@ class JobRunnerConfig:
     """Number of workers to run per GPU. Used to determine how many jobs to run in parallel."""
     log_dir: str = "logs"
     """Directory to store logs for each job. Each job will have its own file in this directory."""
+
+    # job-batcher concatenate
+    concatenate: Optional[List[str]] = None
+    """Whether to run in concatenate mode, where several yaml configs are concatenated into one. Hijacks output_path."""
 
 
 def run_command_get_output(command):
@@ -159,6 +163,64 @@ def get_gpu_count():
     return int(run_command_get_output("nvidia-smi -L | wc -l"))
 
 
+def load_yaml_config_and_generate_commands(config_file: str):
+    """
+    Load a YAML config file and generate all command combinations.
+
+    Args:
+        config_file (str): Path to the YAML configuration file.
+
+    Returns:
+        tuple: A tuple containing (commands, config) where:
+            - commands (list): List of all generated command strings
+            - config (JobRunnerConfig): The loaded configuration object
+    """
+    # Load the yaml
+    with open(config_file, "r") as f:
+        config_dict = yaml.safe_load(f)
+
+        if "template_args" in config_dict:
+            # if a key in template_args is not a list, make it a list
+            for key, value in config_dict["template_args"].items():
+                if not isinstance(value, list):
+                    config_dict["template_args"][key] = [value]
+
+            config_dict["template_args"] = json.dumps(config_dict["template_args"])
+
+    # Create config object
+    config = JobRunnerConfig(**config_dict)
+
+    template = config.command_template
+
+    # Format: {key: [value1, value2, ...], ...}
+    template_args = list(json.loads(config.template_args).items())
+
+    # Extract keys and values for cartesian product
+    keys = [item[0] for item in template_args]
+    value_lists = [item[1] for item in template_args]
+
+    # Generate all combinations using cartesian product
+    commands = []
+    for combination in itertools.product(*value_lists):
+        # Create a dictionary mapping each key to its value in this combination
+        substitutions = dict(zip(keys, combination))
+
+        # Add input/output paths if provided
+        if config.input_path is not None:
+            substitutions["input_path"] = config.input_path
+        if config.output_path is not None:
+            substitutions["output_path"] = config.output_path
+
+        # Substitute values into the template
+        command = template
+        for key, value in substitutions.items():
+            command = command.replace(f"{{{{{key}}}}}", str(value))
+
+        commands.append(command)
+
+    return commands, config
+
+
 def main():
     """Main entry point for the job batcher CLI.
 
@@ -166,6 +228,41 @@ def main():
     job-batcher --command_template "asdf --aa {{aa}} --bb {{bb}}" --template_args '{"aa": [1, 2], "bb": [1, 2]}'
     """
     config = tyro.cli(JobRunnerConfig)
+
+    if config.concatenate is not None and config.output_path is not None:
+        # Create a new yaml with concatenated configs, store in output_path
+        all_commands = []
+
+        # Load each config file and generate commands
+        for config_file in config.concatenate:
+            commands, _ = load_yaml_config_and_generate_commands(config_file)
+            all_commands.extend(commands)
+
+        # Create a new config dict with {{command}} template and all commands as template_args
+        concatenated_config = {
+            "command_template": "{{command}}",
+            "template_args": {"command": all_commands},
+        }
+
+        # Copy over other relevant config fields if they exist
+        if config.job_prefix != "job":
+            concatenated_config["job_prefix"] = config.job_prefix
+        if config.setup_str:
+            concatenated_config["setup_str"] = config.setup_str
+        if config.workers_per_gpu != 1:
+            concatenated_config["workers_per_gpu"] = config.workers_per_gpu
+        if config.log_dir != "logs":
+            concatenated_config["log_dir"] = config.log_dir
+
+        # Write the concatenated config to output_path
+        with open(config.output_path, "w") as f:
+            yaml.dump(concatenated_config, f, default_flow_style=False)
+
+        print(
+            f"Concatenated {len(config.concatenate)} config files into {config.output_path}"
+        )
+        print(f"Total commands: {len(all_commands)}")
+        return
 
     # Check if all required parameters are None and show help
     if (
