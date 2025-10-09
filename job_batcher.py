@@ -6,6 +6,7 @@ import json
 from typing import Optional, List
 import yaml
 import os
+from pathlib import Path
 
 
 @dataclasses.dataclass
@@ -232,9 +233,21 @@ def main():
     if config.concatenate is not None and config.output_path is not None:
         # Create a new yaml with concatenated configs, store in output_path
         all_commands = []
+        config_files = []
+
+        # if path is a folder, get all yaml files in the folder
+        # else, add to config_files
+        for path in config.concatenate:
+            p = Path(path)
+            if p.is_dir():
+                config_files.extend(sorted([str(f) for f in p.glob("**/*.yaml")]))
+            elif p.is_file():
+                config_files.append(str(p))
+            else:
+                print(f"Warning: {path} is not a valid file or directory. Skipping.")
 
         # Load each config file and generate commands
-        for config_file in config.concatenate:
+        for config_file in config_files:
             commands, _ = load_yaml_config_and_generate_commands(config_file)
             all_commands.extend(commands)
 

@@ -7,10 +7,12 @@ A Python utility for running multiple parameter sweep jobs across multiple GPUs 
 - **Multi-GPU support**: Automatically distributes jobs across available GPUs
 - **Parameter sweeps**: Generate all combinations of hyperparameters
 - **YAML configuration**: Define jobs and parameters in YAML files
+- **Config concatenation**: Combine multiple YAML configs into a single config file
 - **Tmux session management**: Each job runs in its own tmux session
 - **Load balancing**: Automatically assigns jobs to the GPU with the fewest running jobs
 - **Logging**: Saves output from each job to separate log files
 - **Job monitoring**: Waits for jobs to complete before launching new ones when GPU capacity is reached
+- **Programmatic API**: Use `load_yaml_config_and_generate_commands()` to generate commands programmatically
 
 ## Installation
 
@@ -65,11 +67,42 @@ job-batcher \
 job-batcher --config_file configs/humanoid_train.yaml
 ```
 
+#### 3. Concatenate Multiple Configs
+
+Combine multiple YAML configuration files into a single config:
+
+```bash
+job-batcher \
+  --concatenate configs/humanoid_train.yaml configs/walker2d_train.yaml \
+  --output_path configs/combined.yaml
+```
+
+You can also point to a folder, and it will automatically find and parse all YAML files in that folder (recursively):
+
+```bash
+job-batcher \
+  --concatenate configs/experiments/ \
+  --output_path configs/all_experiments.yaml
+```
+
+This will:
+- Load each config file (or all YAML files in specified folders) and generate all command combinations
+- Create a new YAML file at `output_path` with all commands
+- The new config uses `{{command}}` as the template with all commands as values
+
+You can then run the combined config:
+
+```bash
+job-batcher --config_file configs/combined.yaml
+```
+
 ### Configuration Options
 
 - `command_template`: Template for the command to run each job. Use `{{parameter_name}}` for placeholders
 - `template_args`: Dictionary of parameters with their possible values (as lists)
 - `config_file`: Path to YAML configuration file
+- `concatenate`: List of YAML config files or folders to concatenate (requires `output_path`). Folders are searched recursively for all `.yaml` files
+- `output_path`: Path to save concatenated config file (used with `concatenate`)
 - `job_prefix`: Prefix for tmux session names (default: "job")
 - `setup_str`: Setup commands to run before each job (e.g., environment variables)
 - `workers_per_gpu`: Number of concurrent jobs per GPU (default: 1)
@@ -120,6 +153,31 @@ This configuration will generate 32 different job combinations (4 × 4 × 1 × 2
 
 Similar to the humanoid configuration but for the Walker2D environment with different wandb project and environment settings.
 
+## Programmatic Usage
+
+You can use the job batcher programmatically in your Python scripts:
+
+```python
+from job_batcher import load_yaml_config_and_generate_commands
+
+# Load a config file and generate all command combinations
+commands, config = load_yaml_config_and_generate_commands("configs/humanoid_train.yaml")
+
+print(f"Generated {len(commands)} commands")
+for i, cmd in enumerate(commands[:3]):  # Print first 3 commands
+    print(f"Command {i}: {cmd}")
+
+# Access configuration
+print(f"Job prefix: {config.job_prefix}")
+print(f"Workers per GPU: {config.workers_per_gpu}")
+```
+
+This is useful for:
+- Previewing commands before running them
+- Integrating job generation into larger workflows
+- Custom job scheduling logic
+- Debugging configuration issues
+
 ## How It Works
 
 1. **Parameter Expansion**: The tool takes the `template_args` and generates all possible combinations using Cartesian product
@@ -153,6 +211,8 @@ tmux list-sessions | grep <job_prefix> | cut -d: -f1 | xargs -I {} tmux kill-ses
 
 ## Example Workflow
 
+### Basic Workflow
+
 1. Create a YAML configuration file with your experiment parameters
 2. Run the job batcher:
    ```bash
@@ -167,6 +227,42 @@ tmux list-sessions | grep <job_prefix> | cut -d: -f1 | xargs -I {} tmux kill-ses
    tail -f logs/minari_job_gpu0_0.log
    ```
 4. Results will be logged to individual files in the `logs/` directory
+
+### Advanced Workflow: Combining Multiple Experiments
+
+If you have multiple experiment configurations and want to run them all together:
+
+1. Create individual config files for each experiment:
+   - `configs/humanoid_train.yaml`
+   - `configs/walker2d_train.yaml`
+   - `configs/hopper_train.yaml`
+
+2. Concatenate them into a single config (you can mix files and folders):
+   ```bash
+   job-batcher \
+     --concatenate configs/robotics/ configs/extra_experiment.yaml \
+     --output_path configs/all_experiments.yaml \
+     --job_prefix "combined_exp" \
+     --workers_per_gpu 2
+   ```
+   
+   Or concatenate an entire folder:
+   ```bash
+   job-batcher \
+     --concatenate configs/ \
+     --output_path configs/all_experiments.yaml
+   ```
+
+3. Run the combined configuration:
+   ```bash
+   job-batcher --config_file configs/all_experiments.yaml
+   ```
+
+This approach is useful when:
+- You want to run diverse experiments with different hyperparameters
+- You need to fairly distribute GPU resources across multiple projects
+- You want a single unified config for reproducibility
+- You have many config files organized in folders
 
 ## Tips
 
