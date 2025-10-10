@@ -36,6 +36,10 @@ class JobRunnerConfig:
     concatenate: Optional[List[str]] = None
     """Whether to run in concatenate mode, where several yaml configs are concatenated into one. Hijacks output_path."""
 
+    # job-batcher chunk
+    chunk: Optional[int] = None
+    """Number of chunks to split the commands into. When provided with config_file and output_path, will generate n YAML files in output_path directory."""
+
 
 def run_command_get_output(command):
     """
@@ -326,6 +330,62 @@ def main():
         print(f"Total commands: {len(all_commands)}")
         return
 
+    if (
+        config.chunk is not None
+        and config.config_file is not None
+        and config.output_path is not None
+    ):
+        # Chunk mode: load config, generate commands, split into n chunks
+        commands, source_config = load_yaml_config_and_generate_commands(
+            config.config_file
+        )
+
+        # Create output directory if it doesn't exist
+        output_dir = Path(config.output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Calculate chunk size
+        num_chunks = config.chunk
+        total_commands = len(commands)
+        chunk_size = (total_commands + num_chunks - 1) // num_chunks  # Ceiling division
+
+        # Split commands into chunks and create YAML files
+        for chunk_idx in range(num_chunks):
+            start_idx = chunk_idx * chunk_size
+            end_idx = min(start_idx + chunk_size, total_commands)
+            chunk_commands = commands[start_idx:end_idx]
+
+            if not chunk_commands:  # Skip empty chunks
+                continue
+
+            # Create chunk config with {{command}} template
+            chunk_config = {
+                "command_template": "{{command}}",
+                "template_args": {"command": chunk_commands},
+            }
+
+            # Copy over other relevant config fields from source config
+            if source_config.job_prefix != "job":
+                chunk_config["job_prefix"] = source_config.job_prefix
+            if source_config.setup_str:
+                chunk_config["setup_str"] = source_config.setup_str
+            if source_config.workers_per_gpu != 1:
+                chunk_config["workers_per_gpu"] = source_config.workers_per_gpu
+            if source_config.log_dir != "logs":
+                chunk_config["log_dir"] = source_config.log_dir
+
+            # Write chunk to file
+            chunk_filename = output_dir / f"chunk_{chunk_idx:03d}.yaml"
+            with open(chunk_filename, "w") as f:
+                yaml.dump(chunk_config, f, default_flow_style=False)
+
+            print(f"Created {chunk_filename} with {len(chunk_commands)} commands")
+
+        print(
+            f"\nChunked {total_commands} commands into {num_chunks} files in {output_dir}"
+        )
+        return
+
     # Check if all required parameters are None and show help
     if (
         config.command_template is None
@@ -342,8 +402,27 @@ def main():
         )
         print("\n  2. Using a config file:")
         print("     job-batcher --config_file configs/my_experiment.yaml")
+        print("\n  3. Chunking a config file:")
+        print(
+            "     job-batcher --config_file configs/my_experiment.yaml --chunk 4 --output_path chunks/"
+        )
         print("\nFor more help, run: job-batcher --help")
         return
+
+    # Check if chunk mode is being used but missing required parameters
+    if config.chunk is not None:
+        if config.config_file is None:
+            print("Error: --chunk requires --config_file to be specified")
+            print(
+                "Usage: job-batcher --config_file <path> --chunk <n> --output_path <directory>"
+            )
+            return
+        if config.output_path is None:
+            print("Error: --chunk requires --output_path to be specified")
+            print(
+                "Usage: job-batcher --config_file <path> --chunk <n> --output_path <directory>"
+            )
+            return
 
     if config.config_file is not None:
         # Load the yaml
