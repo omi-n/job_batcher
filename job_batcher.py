@@ -133,9 +133,18 @@ def launch_job_in_tmux(command, job_prefix, postfix, gpu_id=None, setup_str=""):
 
 
 def launch_tmux_and_dump_logs(
-    command, job_prefix, postfix, log_dir, gpu_id=None, setup_str=""
+    command,
+    job_prefix,
+    postfix,
+    log_dir,
+    gpu_id=None,
+    setup_str="",
+    finished_commands_file=None,
 ):
     """Launch a tmux session for the job and redirect its output to a log file."""
+    # Save the original command before any modifications
+    original_command = command
+
     if gpu_id is not None:
         # If a specific GPU ID is provided, set the CUDA_VISIBLE_DEVICES environment variable
         command = f"CUDA_VISIBLE_DEVICES={gpu_id} {command}"
@@ -146,6 +155,14 @@ def launch_tmux_and_dump_logs(
         command = f"{setup_str} && {command}"
 
     log_file = f"{log_dir}/{job_prefix}_{postfix}.log"
+
+    # If finished_commands_file is provided, append original command to it after completion
+    if finished_commands_file:
+        # Escape single quotes in the original command for the shell
+        escaped_command = original_command.replace("'", "'\\''")
+        completion_cmd = f"echo '{escaped_command}' >> {finished_commands_file}"
+        command = f"{command} && {completion_cmd}"
+
     tmux_cmd = (
         f'tmux new-session -d -s "{job_prefix}_{postfix}" "{command} > {log_file} 2>&1"'
     )
@@ -162,6 +179,38 @@ def get_gpu_count():
     # Count the number of lines in the output of `nvidia-smi -L`
     # Each line corresponds to a GPU
     return int(run_command_get_output("nvidia-smi -L | wc -l"))
+
+
+def load_finished_commands(log_dir: str):
+    """
+    Load the list of finished commands from the log directory.
+
+    Args:
+        log_dir (str): Directory containing the finished commands file.
+
+    Returns:
+        set: A set of finished command strings.
+    """
+    finished_commands_file = os.path.join(log_dir, "finished_commands.txt")
+    if not os.path.exists(finished_commands_file):
+        return set()
+
+    with open(finished_commands_file, "r") as f:
+        # Read all lines and strip whitespace, filter out empty lines
+        return set(line.strip() for line in f if line.strip())
+
+
+def get_finished_commands_file(log_dir: str):
+    """
+    Get the path to the finished commands file in the log directory.
+
+    Args:
+        log_dir (str): Directory containing the finished commands file.
+
+    Returns:
+        str: Path to the finished commands file.
+    """
+    return os.path.join(log_dir, "finished_commands.txt")
 
 
 def load_yaml_config_and_generate_commands(config_file: str):
@@ -382,12 +431,31 @@ def main():
     # Get gpu count
     gpu_count = get_gpu_count()
 
+    # Load finished commands to skip already completed jobs
+    if not os.path.exists(config.log_dir):
+        os.makedirs(config.log_dir)
+
+    finished_commands = load_finished_commands(config.log_dir)
+    finished_commands_file = get_finished_commands_file(config.log_dir)
+
+    # Filter out already finished commands
+    original_command_count = len(commands)
+    commands_to_run = [cmd for cmd in commands if cmd not in finished_commands]
+    skipped_count = original_command_count - len(commands_to_run)
+
+    if skipped_count > 0:
+        print(f"Skipping {skipped_count} already finished command(s).")
+
+    if len(commands_to_run) == 0:
+        print("All commands have already been completed. Nothing to run.")
+        return
+
     # Launch jobs. If there is <gpu_count>*<jobs_per_gpu> jobs, pause launching.
     # When a jobs finishes, launch the next one.
     # Launch that job to the gpu with fewest jobs running.
     # gpu_jobs = get_job_count_by_gpu(config.job_prefix, gpu_count)
 
-    for idx, job in enumerate(commands):
+    for idx, job in enumerate(commands_to_run):
         while (
             len(get_job_tmux_sessions(config.job_prefix))
             >= gpu_count * config.workers_per_gpu
@@ -398,11 +466,14 @@ def main():
         gpu_jobs = get_job_tmux_sessions_by_gpu(config.job_prefix, gpu_count)
         min_gpu_id = min(range(gpu_count), key=lambda i: len(gpu_jobs[i]))
 
-        if not os.path.exists(config.log_dir):
-            os.makedirs(config.log_dir)
-
         launch_tmux_and_dump_logs(
-            job, config.job_prefix, idx, config.log_dir, min_gpu_id, config.setup_str
+            job,
+            config.job_prefix,
+            idx,
+            config.log_dir,
+            min_gpu_id,
+            config.setup_str,
+            finished_commands_file,
         )
         print(f"Launched job {idx} on GPU {min_gpu_id}: {job}")
 
