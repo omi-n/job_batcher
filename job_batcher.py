@@ -500,13 +500,6 @@ def main():
     world_size = int(os.environ.get("SLURM_NNODES", world_size))
     rank = int(os.environ.get("SLURM_NODEID", rank))
 
-    # If world_size == 1, run all commands in this process so don't chunk
-    if world_size == 1:
-        commands = commands
-    else:
-        # Chunk commands based on rank and world_size
-        commands = [cmd for i, cmd in enumerate(commands) if i % world_size == rank]
-
     # Get gpu count
     gpu_count = get_gpu_count()
 
@@ -521,6 +514,13 @@ def main():
     original_command_count = len(commands)
     commands_to_run = [cmd for cmd in commands if cmd not in finished_commands]
     skipped_count = original_command_count - len(commands_to_run)
+
+    # If world_size == 1, run all commands in this process so don't chunk
+    if world_size > 1:
+        # Chunk commands based on rank and world_size
+        commands_to_run = [
+            cmd for i, cmd in enumerate(commands_to_run) if i % world_size == rank
+        ]
 
     if skipped_count > 0:
         print(f"Skipping {skipped_count} already finished command(s).")
