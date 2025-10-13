@@ -160,15 +160,17 @@ def launch_tmux_and_dump_logs(
 
     log_file = f"{log_dir}/{job_prefix}_{postfix}.log"
 
+    command = f"{command} > {log_file} 2>&1"
+
     # If finished_commands_file is provided, append original command to it after completion
     if finished_commands_file:
         # Escape single quotes in the original command for the shell
-        escaped_command = original_command.replace("'", "'\\''")
+        escaped_command = original_command.replace("'", "\\'")
         completion_cmd = f"echo '{escaped_command}' >> {finished_commands_file}"
-        command = f"{command} && {completion_cmd}"
+        command = f"{command}  && {completion_cmd}"
 
     tmux_cmd = (
-        f'tmux new-session -d -s "{job_prefix}_{postfix}" "{command} > {log_file} 2>&1"'
+        f'tmux new-session -d -s "{job_prefix}_{postfix}" "{command}"'
     )
     return run_command_get_output(tmux_cmd)
 
