@@ -504,6 +504,7 @@ def main():
 
     # Get gpu count
     gpu_count = get_gpu_count()
+    print(f"Detected {gpu_count} GPUs available.")
 
     # Load finished commands to skip already completed jobs
     if not os.path.exists(config.log_dir):
