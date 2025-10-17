@@ -7,6 +7,8 @@ from typing import Optional, List
 import yaml
 import os
 from pathlib import Path
+import random
+import string
 
 
 @dataclasses.dataclass
@@ -158,7 +160,9 @@ def launch_tmux_and_dump_logs(
     if setup_str:
         command = f"{setup_str} && {command}"
 
-    log_file = f"{log_dir}/{job_prefix}_{postfix}.log"
+    # Generate a random 6-character string to avoid log file collisions
+    random_suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=6))
+    log_file = f"{log_dir}/{job_prefix}_{postfix}_{random_suffix}.log"
 
     command = f"{command} > {log_file} 2>&1"
 
