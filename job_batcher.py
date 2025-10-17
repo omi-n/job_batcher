@@ -169,9 +169,7 @@ def launch_tmux_and_dump_logs(
         completion_cmd = f"echo '{escaped_command}' >> {finished_commands_file}"
         command = f"{command}  && {completion_cmd}"
 
-    tmux_cmd = (
-        f'tmux new-session -d -s "{job_prefix}_{postfix}" "{command}"'
-    )
+    tmux_cmd = f'tmux new-session -d -s "{job_prefix}_{postfix}" "{command}"'
     return run_command_get_output(tmux_cmd)
 
 
@@ -189,34 +187,54 @@ def get_gpu_count():
 
 def load_finished_commands(log_dir: str):
     """
-    Load the list of finished commands from the log directory.
+    Load the list of finished commands from all files in the finished_commands directory.
+    This prevents race conditions by allowing each process to write to its own file.
 
     Args:
-        log_dir (str): Directory containing the finished commands file.
+        log_dir (str): Directory containing the finished_commands subdirectory.
 
     Returns:
-        set: A set of finished command strings.
+        set: A set of finished command strings from all process-specific files.
     """
-    finished_commands_file = os.path.join(log_dir, "finished_commands.txt")
-    if not os.path.exists(finished_commands_file):
+    finished_commands_dir = os.path.join(log_dir, "finished_commands")
+    if not os.path.exists(finished_commands_dir):
         return set()
 
-    with open(finished_commands_file, "r") as f:
-        # Read all lines and strip whitespace, filter out empty lines
-        return set(line.strip() for line in f if line.strip())
+    finished_commands = set()
+    # Read all files in the finished_commands directory
+    for filename in os.listdir(finished_commands_dir):
+        filepath = os.path.join(finished_commands_dir, filename)
+        if os.path.isfile(filepath):
+            with open(filepath, "r") as f:
+                # Read all lines and strip whitespace, filter out empty lines
+                finished_commands.update(line.strip() for line in f if line.strip())
+
+    return finished_commands
 
 
-def get_finished_commands_file(log_dir: str):
+def get_finished_commands_file(log_dir: str, node_rank: int = 0, gpu_id: int = None):
     """
-    Get the path to the finished commands file in the log directory.
+    Get the path to the finished commands file for a specific process.
+    Each process (identified by node_rank and gpu_id) gets its own file to prevent race conditions.
 
     Args:
-        log_dir (str): Directory containing the finished commands file.
+        log_dir (str): Directory containing the finished_commands subdirectory.
+        node_rank (int): The rank of the current node/process. Defaults to 0.
+        gpu_id (int, optional): The GPU ID assigned to this process. Defaults to None.
 
     Returns:
-        str: Path to the finished commands file.
+        str: Path to the finished commands file for this specific process.
     """
-    return os.path.join(log_dir, "finished_commands.txt")
+    finished_commands_dir = os.path.join(log_dir, "finished_commands")
+    os.makedirs(finished_commands_dir, exist_ok=True)
+
+    # Create a unique filename based on node rank and GPU ID
+    if gpu_id is not None:
+        filename = f"node{node_rank}_gpu{gpu_id}.txt"
+    else:
+        filename = f"node{node_rank}.txt"
+
+    return os.path.join(finished_commands_dir, filename)
 
 
 def load_yaml_config_and_generate_commands(config_file: str):
@@ -511,7 +529,6 @@ def main():
         os.makedirs(config.log_dir)
 
     finished_commands = load_finished_commands(config.log_dir)
-    finished_commands_file = get_finished_commands_file(config.log_dir)
 
     # Filter out already finished commands
     original_command_count = len(commands)
@@ -547,6 +564,11 @@ def main():
 
         gpu_jobs = get_job_tmux_sessions_by_gpu(config.job_prefix, gpu_count)
         min_gpu_id = min(range(gpu_count), key=lambda i: len(gpu_jobs[i]))
+
+        # Get the finished commands file for this specific GPU and node
+        finished_commands_file = get_finished_commands_file(
+            config.log_dir, rank, min_gpu_id
+        )
 
         launch_tmux_and_dump_logs(
             job,

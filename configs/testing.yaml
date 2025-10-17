@@ -1,5 +1,5 @@
 command_template: >-
-  echo {{num_epochs}},{{learning_rate}},{{ema_decay}},{{loss_function}},{{weight_decay}}
+  echo {{num_epochs}},{{learning_rate}},{{ema_decay}},{{loss_function}},{{weight_decay}} && sleep 3
 template_args:
   learning_rate: [1e-5, 5e-5, 1e-4, 5e-4]
   ema_decay: [0.0, 0.99, 0.995, 0.999]
