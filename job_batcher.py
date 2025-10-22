@@ -529,8 +529,7 @@ def main():
     print(f"Detected {gpu_count} GPUs available.")
 
     # Load finished commands to skip already completed jobs
-    if not os.path.exists(config.log_dir):
-        os.makedirs(config.log_dir)
+    os.makedirs(config.log_dir, exist_ok=True)
 
     finished_commands = load_finished_commands(config.log_dir)
 
