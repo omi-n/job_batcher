@@ -42,6 +42,11 @@ class JobRunnerConfig:
     chunk: Optional[int] = None
     """Number of chunks to split the commands into. When provided with config_file and output_path, will generate n YAML files in output_path directory."""
 
+    # job-batcher ignore args
+    ignore_args: Optional[List[str]] = None
+    """List of argument names to ignore when comparing finished commands. Useful for arguments with dynamic values. 
+    Pass argument names without dashes (e.g., 'save_model_path' instead of '--save_model_path')."""
+
 
 def run_command_get_output(command):
     """
@@ -146,6 +151,7 @@ def launch_tmux_and_dump_logs(
     gpu_id=None,
     setup_str="",
     finished_commands_file=None,
+    ignore_args=None,
 ):
     """Launch a tmux session for the job and redirect its output to a log file."""
     # Save the original command before any modifications
@@ -166,15 +172,60 @@ def launch_tmux_and_dump_logs(
 
     command = f"{command} > {log_file} 2>&1"
 
-    # If finished_commands_file is provided, append original command to it after completion
+    # If finished_commands_file is provided, append normalized command to it after completion
     if finished_commands_file:
-        # Escape single quotes in the original command for the shell
-        escaped_command = original_command.replace("'", "\\'")
+        # Normalize the command to remove ignored arguments before saving
+        command_to_save = normalize_command(original_command, ignore_args)
+        # Escape single quotes in the command for the shell
+        escaped_command = command_to_save.replace("'", "\\'")
         completion_cmd = f"echo '{escaped_command}' >> {finished_commands_file}"
         command = f"{command}  && {completion_cmd}"
 
     tmux_cmd = f'tmux new-session -d -s "{job_prefix}_{postfix}" "{command}"'
     return run_command_get_output(tmux_cmd)
+
+
+def normalize_command(command: str, ignore_args: Optional[List[str]] = None):
+    """
+    Normalize a command by removing ignored arguments and their values.
+
+    This is useful for comparing commands where certain arguments have dynamic values
+    (e.g., save_model_path with timestamps or random strings).
+
+    Args:
+        command (str): The command to normalize.
+        ignore_args (List[str], optional): List of argument names to remove (e.g., ["save_model_path", "run_id"]).
+            The function will automatically handle both --arg and -arg formats.
+
+    Returns:
+        str: The normalized command with ignored arguments removed.
+    """
+    if not ignore_args:
+        return command
+
+    import re
+
+    normalized = command
+
+    for arg in ignore_args:
+        # Add -- prefix if not already present
+        if not arg.startswith("-"):
+            arg = f"--{arg}"
+
+        # Pattern to match: arg followed by its value (next token that doesn't start with -)
+        # This handles both --arg value and --arg=value formats
+
+        # Match --arg value (space-separated)
+        pattern1 = rf"{re.escape(arg)}\s+[^\s-][^\s]*"
+        # Match --arg=value (equals-separated)
+        pattern2 = rf"{re.escape(arg)}=[^\s]+"
+
+        normalized = re.sub(pattern1, "", normalized)
+        normalized = re.sub(pattern2, "", normalized)
+
+    # Clean up multiple spaces
+    normalized = " ".join(normalized.split())
+    return normalized
 
 
 def get_gpu_count():
@@ -533,9 +584,13 @@ def main():
 
     finished_commands = load_finished_commands(config.log_dir)
 
-    # Filter out already finished commands
+    # Filter out already finished commands, normalizing both for comparison
     original_command_count = len(commands)
-    commands_to_run = [cmd for cmd in commands if cmd not in finished_commands]
+    commands_to_run = [
+        cmd
+        for cmd in commands
+        if normalize_command(cmd, config.ignore_args) not in finished_commands
+    ]
     skipped_count = original_command_count - len(commands_to_run)
 
     # If world_size == 1, run all commands in this process so don't chunk
@@ -581,6 +636,7 @@ def main():
             min_gpu_id,
             config.setup_str,
             finished_commands_file,
+            config.ignore_args,
         )
         print(f"Launched job {idx} on GPU {min_gpu_id}: {job}")
 

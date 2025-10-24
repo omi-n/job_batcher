@@ -1,0 +1,12 @@
+command_template: >-
+  echo {{num_epochs}},{{learning_rate}},{{ema_decay}},{{loss_function}},{{weight_decay}} --save_model_path /tmp/models/run_{{run_id}}
+template_args:
+  learning_rate: [1e-5, 5e-5]
+  ema_decay: [0.0, 0.99]
+  loss_function: "mse_loss"
+  num_epochs: [80, 160]
+  weight_decay: 1e-2
+  run_id: ["abc123", "def456", "xyz789"]
+job_prefix: "test_ignore"
+workers_per_gpu: 2
+ignore_args: ["save_model_path"]
